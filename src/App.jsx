@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import './index.css'
 import valentineImg from './assets/valentine.jpg'
 import penguinImg from './assets/penguin.jpg'
@@ -27,37 +27,66 @@ function App() {
   }, [])
 
   // Runaway No Button Logic
-  // Runaway No Button Logic
-  const moveButton = () => {
-    if (!noBtnRef.current) return
+  const lastMoveTime = useRef(0)
+
+  const moveButton = useCallback(() => {
+    if (!noBtnRef.current || !containerRef.current) return
+
+    // Update timestamp for throttling
+    lastMoveTime.current = Date.now()
 
     // Dynamic dimensions
     const btnRect = noBtnRef.current.getBoundingClientRect()
+    const containerRect = containerRef.current.getBoundingClientRect()
+
     const btnWidth = btnRect.width
     const btnHeight = btnRect.height
 
-    // Use viewport dimensions
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
+    // Calculate available space slightly padded
+    const padding = 20
+    // Calculate available space
+    // random value between padding and (width - btnWidth - padding)
+    const maxLeft = containerRect.width - btnWidth - padding
+    const maxTop = containerRect.height - btnHeight - padding
 
-    const padding = 20 // Keep it away from the absolute edges
-
-    // Ensure strictly positive range
-    // We calculate available space for the top-left corner
-    const maxX = Math.max(0, viewportWidth - btnWidth - padding)
-    const maxY = Math.max(0, viewportHeight - btnHeight - padding)
-
-    // Generate random position within bounds [padding, maxX]
-    const randomX = Math.random() * (maxX - padding) + padding
-    const randomY = Math.random() * (maxY - padding) + padding
+    const randomX = Math.max(padding, Math.random() * maxLeft)
+    const randomY = Math.max(padding, Math.random() * maxTop)
 
     setNoPos({
-      position: 'fixed',
+      position: 'absolute',
       left: `${randomX}px`,
-      top: `${randomY}px`,
-      zIndex: 1000 // Always on top
+      top: `${randomY}px`
+      // removed fixed positioning and zIndex to keep it inside container context
     })
-  }
+  }, [])
+
+  // Proximity trigger
+  useEffect(() => {
+    if (yesPressed) return
+
+    const handleMouseMove = (e) => {
+      if (!noBtnRef.current) return
+
+      const btnRect = noBtnRef.current.getBoundingClientRect()
+      const btnCenter = {
+        x: btnRect.left + btnRect.width / 2,
+        y: btnRect.top + btnRect.height / 2
+      }
+
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - btnCenter.x, 2) +
+        Math.pow(e.clientY - btnCenter.y, 2)
+      )
+
+      // Trigger if cursor is close (e.g. within 150px) AND we haven't moved recently
+      if (distance < 150 && Date.now() - lastMoveTime.current > 400) {
+        moveButton()
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [yesPressed, moveButton])
 
   // Confetti Logic
   useEffect(() => {
